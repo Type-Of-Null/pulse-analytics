@@ -70,7 +70,7 @@ src/pulse/
    `pg_try_advisory_xact_lock` гарантирует единственного активного публикатора и порядок.
    → [ADR-0004](docs/adr/0004-transactional-outbox.md)
 5. **Схема ClickHouse**: `ReplacingMergeTree` + помесячные партиции + TTL + bloom-filter индекс;
-   агрегаты `countState/uniqState` в `AggregatingMergeTree` через materialized view — таймсерии
+   агрегаты `uniqState` (события по `event_id`, пользователи) в `AggregatingMergeTree` через materialized view — таймсерии
    читают на порядки меньше строк. → [ADR-0005](docs/adr/0005-clickhouse-schema.md)
 6. **Kubernetes**: Kustomize base/overlays/components, миграции отдельным Job'ом, KEDA по lag,
    startup/readiness/liveness probes, graceful shutdown, PDB, non-root + read-only FS, NetworkPolicy.

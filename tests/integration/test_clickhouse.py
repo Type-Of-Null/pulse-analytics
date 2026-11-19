@@ -99,3 +99,43 @@ async def test_analytics_queries(clickhouse: Any) -> None:
 
     retention = await repo.retention_counts(project, "visit", "visit", date(2026, 3, 2), 3)
     assert retention == [3, 2, 1, 0]
+
+
+async def test_client_retry_is_not_double_counted_in_rollup(clickhouse: Any) -> None:
+    project = uuid4()
+    retried = event(project, "visit", "u1", T0)
+    sink = ClickHouseEventSink(clickhouse)
+    await sink.write([retried], dedup_token="offset-1")
+    await sink.write([retried], dedup_token="offset-2")  # same event, re-sent by the client
+
+    top = await ClickHouseAnalyticsRepository(clickhouse).top_events(
+        project, TimeRange(T0, T0 + timedelta(hours=1)), limit=10
+    )
+    assert [(e.name, e.events) for e in top] == [("visit", 1)]
+
+
+async def test_rollup_includes_the_partial_first_minute(clickhouse: Any) -> None:
+    project = uuid4()
+    await ClickHouseEventSink(clickhouse).write(
+        [event(project, "visit", "u1", T0 + timedelta(seconds=40))], dedup_token="partial"
+    )
+    top = await ClickHouseAnalyticsRepository(clickhouse).top_events(
+        project, TimeRange(T0 + timedelta(seconds=30), T0 + timedelta(minutes=5)), limit=10
+    )
+    assert [(e.name, e.events) for e in top] == [("visit", 1)]
+
+
+async def test_funnel_window_respects_milliseconds(clickhouse: Any) -> None:
+    project = uuid4()
+    start = T0 + timedelta(milliseconds=100)
+    await ClickHouseEventSink(clickhouse).write(
+        [
+            event(project, "visit", "u1", start),
+            event(project, "signup", "u1", start + timedelta(milliseconds=1800)),
+        ],
+        dedup_token="funnel-ms",
+    )
+    levels = await ClickHouseAnalyticsRepository(clickhouse).funnel_levels(
+        project, ["visit", "signup"], 1, TimeRange(T0, T0 + timedelta(hours=1))
+    )
+    assert levels == {1: 1}

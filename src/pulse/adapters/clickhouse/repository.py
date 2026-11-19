@@ -24,7 +24,9 @@ def build_funnel_query(step_count: int, window_seconds: int) -> str:
         SELECT level, count() AS users
         FROM (
             SELECT user_id,
-                   windowFunnel({int(window_seconds)})(toDateTime(timestamp), {conditions}) AS level
+                   windowFunnel({int(window_seconds) * 1000})(
+                       toUInt64(toUnixTimestamp64Milli(timestamp)), {conditions}
+                   ) AS level
             FROM events
             WHERE project_id = {{project:UUID}}
               AND timestamp >= {{start:DateTime64(3, 'UTC')}}
@@ -57,6 +59,9 @@ def build_retention_query(days: int) -> str:
 
 
 class ClickHouseAnalyticsRepository:
+    """Timeseries and top events read the per-minute rollup: they cover every minute that
+    overlaps the requested range. Funnels and retention read raw events."""
+
     def __init__(self, client: Any = None) -> None:
         self._client = client
 
@@ -70,11 +75,11 @@ class ClickHouseAnalyticsRepository:
         event_filter = "AND name = {event:String}" if event else ""
         sql = f"""
             SELECT toStartOfInterval(minute, {interval}) AS bucket,
-                   countMerge(events) AS events,
+                   uniqMerge(events) AS events,
                    uniqMerge(users) AS users
             FROM events_by_minute
             WHERE project_id = {{project:UUID}}
-              AND minute >= {{start:DateTime('UTC')}}
+              AND minute >= toStartOfMinute({{start:DateTime('UTC')}})
               AND minute < {{end:DateTime('UTC')}}
               {event_filter}
             GROUP BY bucket
@@ -92,10 +97,10 @@ class ClickHouseAnalyticsRepository:
 
     async def top_events(self, project_id: UUID, period: TimeRange, limit: int) -> list[EventCount]:
         sql = """
-            SELECT name, countMerge(events) AS events, uniqMerge(users) AS users
+            SELECT name, uniqMerge(events) AS events, uniqMerge(users) AS users
             FROM events_by_minute
             WHERE project_id = {project:UUID}
-              AND minute >= {start:DateTime('UTC')}
+              AND minute >= toStartOfMinute({start:DateTime('UTC')})
               AND minute < {end:DateTime('UTC')}
             GROUP BY name
             ORDER BY events DESC

@@ -65,7 +65,7 @@ async def test_service_rejects_too_long_retention() -> None:
 
 def test_funnel_query_uses_bound_parameters_for_step_names() -> None:
     sql = build_funnel_query(3, 3600)
-    assert "windowFunnel(3600)" in sql
+    assert "windowFunnel(3600000)" in sql
     assert "name = {s0:String}, name = {s1:String}, name = {s2:String}" in sql
 
 

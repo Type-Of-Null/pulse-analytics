@@ -73,7 +73,9 @@ def test_full_pipeline(project: dict[str, Any]) -> None:
         ).json()
         return body if sum(e["events"] for e in body) >= len(events) + 1 else None
 
-    top = {e["name"]: (e["events"], e["users"]) for e in eventually(top_events)}
+    top_body = eventually(top_events)
+    assert sum(e["events"] for e in top_body) == len(events) + 1
+    top = {e["name"]: (e["events"], e["users"]) for e in top_body}
     assert top["visit"][1] == 10
     assert top["signup"] == (6, 6)
     assert top["pay"] == (3, 3)

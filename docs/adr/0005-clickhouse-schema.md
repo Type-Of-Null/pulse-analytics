@@ -12,8 +12,11 @@
 - bloom-filter индекс по `user_id` — поиск событий конкретного пользователя;
 - `LowCardinality(String)` для имён событий, `Map(LowCardinality(String), String)` с ZSTD для свойств.
 
-**`events_by_minute`** — `AggregatingMergeTree` + materialized view: `countState()` и
-`uniqState(user_id)` по (проект, событие, минута). Таймсерии и топ событий читают агрегаты —
+**`events_by_minute`** — `AggregatingMergeTree` + materialized view: `uniqState(event_id)` и
+`uniqState(user_id)` по (проект, событие, минута). Число событий считается как число уникальных
+`event_id`: MV видит каждую вставку, и `countState()` посчитал бы повторно отправленное клиентом
+событие дважды, а merge сырой таблицы агрегаты уже не исправит. Плата — погрешность `uniq` на
+больших объёмах (доли процента). Таймсерии и топ событий читают агрегаты —
 на порядки меньше строк, чем сырые данные; `uniqMerge` корректно объединяет уникальных
 пользователей между минутами/часами/днями.
 
