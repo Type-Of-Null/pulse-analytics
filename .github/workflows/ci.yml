@@ -34,7 +34,7 @@ jobs:
       - run: uv sync --frozen
       - name: Unit tests
         run: uv run pytest
-      - name: Integration tests (testcontainers: ClickHouse, Postgres)
+      - name: "Integration tests (testcontainers: ClickHouse, Postgres)"
         run: uv run pytest -m integration
 
   e2e-compose:
