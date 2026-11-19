@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     log_json: bool = True
     http_host: str = "0.0.0.0"
     http_port: int = 8000
-    admin_token: SecretStr = SecretStr("change-me")
+    admin_token: SecretStr = SecretStr("")
 
     kafka: KafkaSettings = KafkaSettings()
     clickhouse: ClickHouseSettings = ClickHouseSettings()

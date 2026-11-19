@@ -97,6 +97,9 @@ def build_app(service: ProjectService, admin_token: str, lifespan: object | None
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
+    admin_token = settings.admin_token.get_secret_value()
+    if not admin_token:
+        raise RuntimeError("PULSE_ADMIN_TOKEN must be set")
     engine = create_engine(settings.postgres)
     service = ProjectService(PostgresUnitOfWorkFactory(engine), settings.kafka.keys_topic)
 
@@ -107,4 +110,4 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         finally:
             await engine.dispose()
 
-    return build_app(service, settings.admin_token.get_secret_value(), lifespan)
+    return build_app(service, admin_token, lifespan)
