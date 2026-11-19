@@ -4,7 +4,7 @@
 
 - **Kustomize** `base` + `overlays/dev` (kind, инфраструктура внутри кластера) + `overlays/prod`
   (managed Kafka/ClickHouse/Postgres, образ из GHCR) + `components/keda` (подключаемый компонент).
-- **Миграции** — отдельный `Job` (`Argo CD PreSync hook`), а не init-container в каждом pod'е:
+- **Миграции** — отдельный `Job` (Argo CD Sync hook в волне `-1`: после ConfigMap/Secret, до приложений), а не init-container в каждом pod'е:
   нет гонок миграций при раскатке N реплик.
 - **Автомасштабирование:** API — HPA по CPU; `writer` — **KEDA по consumer lag** Kafka (lag — это и
   есть «свежесть данных» для пользователя), максимум реплик = числу партиций.

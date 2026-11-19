@@ -1,5 +1,6 @@
 # Schema/topic migrations run once per release, never from app replicas (no races on startup).
-# Under Argo CD this Job is a PreSync hook; with plain kubectl apps simply restart until it completes.
+# Under Argo CD this Job is a Sync hook in wave -1: after config/secrets (wave -2), before the apps.
+# With plain kubectl the apps simply restart until it completes.
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -7,7 +8,8 @@ metadata:
   labels:
     app.kubernetes.io/name: pulse-migrate
   annotations:
-    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/sync-wave: "-1"
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
 spec:
   backoffLimit: 10

@@ -16,6 +16,9 @@ images:
     newTag: local
 secretGenerator:
   - name: pulse-secrets
+    options:
+      annotations:
+        argocd.argoproj.io/sync-wave: "-2"
     literals:
       - PULSE_ADMIN_TOKEN=dev-admin-token
       - PULSE_CLICKHOUSE__PASSWORD=pulse
