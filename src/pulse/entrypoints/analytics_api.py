@@ -29,9 +29,14 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
+def _utc(value: datetime) -> datetime:
+    """Bounds without an offset are interpreted as UTC."""
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value
+
+
 def _period(start: datetime | None, end: datetime | None) -> TimeRange:
-    end = end or _now()
-    return TimeRange(start=start or end - timedelta(days=7), end=end)
+    end = _utc(end) if end else _now()
+    return TimeRange(start=_utc(start) if start else end - timedelta(days=7), end=end)
 
 
 class FunnelRequest(BaseModel):

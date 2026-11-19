@@ -98,6 +98,22 @@ def test_timeseries_endpoint(analytics: tuple[TestClient, FakeAnalyticsRepositor
     assert repo.calls[0] == ("timeseries", (PROJECT, "signup", "day"))
 
 
+@pytest.mark.parametrize("bounds", [{"from": "2026-01-01T00:00:00"}, {"to": "2026-12-01T00:00:00"}])
+def test_bounds_without_offset_are_treated_as_utc(
+    analytics: tuple[TestClient, FakeAnalyticsRepository], bounds: dict[str, str]
+) -> None:
+    client, _ = analytics
+    params = {"granularity": "day", "from": "2026-11-01T00:00:00+03:00"} | bounds
+    assert client.get("/v1/analytics/timeseries", params=params).status_code == 200
+
+
+def test_admin_api_refuses_to_start_without_token() -> None:
+    from pulse.config import Settings
+
+    with pytest.raises(RuntimeError, match="PULSE_ADMIN_TOKEN"):
+        admin_api.create_app(Settings(admin_token=""))
+
+
 def test_timeseries_rejects_too_wide_range(
     analytics: tuple[TestClient, FakeAnalyticsRepository],
 ) -> None:
