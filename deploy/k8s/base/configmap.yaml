@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pulse-config
+data:
+  PULSE_LOG_JSON: "true"
+  PULSE_KAFKA__BOOTSTRAP_SERVERS: kafka:9092
+  PULSE_KAFKA__REPLICATION_FACTOR: "1"
+  PULSE_CLICKHOUSE__HOST: clickhouse
+  PULSE_CLICKHOUSE__USER: pulse
+  PULSE_POSTGRES__POOL_SIZE: "5"

@@ -1,0 +1,26 @@
+# Production: managed Kafka/ClickHouse/Postgres, secrets from External Secrets / Sealed Secrets,
+# image pinned by CI to the commit SHA.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: pulse
+resources:
+  - ../../base
+components:
+  - ../../components/keda
+images:
+  - name: pulse
+    newName: ghcr.io/type-of-null/pulse-analytics
+    newTag: latest
+configMapGenerator:
+  - name: pulse-config
+    behavior: merge
+    literals:
+      - PULSE_KAFKA__BOOTSTRAP_SERVERS=kafka-0.kafka.data:9092,kafka-1.kafka.data:9092,kafka-2.kafka.data:9092
+      - PULSE_KAFKA__REPLICATION_FACTOR=3
+      - PULSE_CLICKHOUSE__HOST=clickhouse.data
+patches:
+  - target: {kind: ScaledObject, name: writer}
+    patch: |
+      - op: replace
+        path: /spec/triggers/0/metadata/bootstrapServers
+        value: kafka-0.kafka.data:9092,kafka-1.kafka.data:9092,kafka-2.kafka.data:9092

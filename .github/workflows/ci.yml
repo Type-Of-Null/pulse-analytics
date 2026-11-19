@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_VERSION: "0.9.7"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with: {version: "${{ env.UV_VERSION }}", enable-cache: true}
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy
+      - run: uv run mypy scripts tests
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with: {version: "${{ env.UV_VERSION }}", enable-cache: true}
+      - run: uv sync --frozen
+      - name: Unit tests
+        run: uv run pytest
+      - name: Integration tests (testcontainers: ClickHouse, Postgres)
+        run: uv run pytest -m integration
+
+  e2e-compose:
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with: {version: "${{ env.UV_VERSION }}", enable-cache: true}
+      - run: uv sync --frozen
+      - run: docker compose up -d --build --wait --wait-timeout 300
+      - run: uv run pytest -m e2e
+      - name: Smoke load (5k events/s for 15s)
+        run: |
+          KEY=$(curl -sf -XPOST localhost:8003/v1/projects -H 'Authorization: Bearer dev-admin-token' \
+            -H 'Content-Type: application/json' -d '{"name":"ci-load"}' | jq -r .key.api_key)
+          sleep 3
+          uv run python scripts/loadgen.py --api-key "$KEY" --rps 5000 --duration 15
+      - if: failure()
+        run: docker compose logs --tail 200
+
+  e2e-kubernetes:
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with: {version: "${{ env.UV_VERSION }}", enable-cache: true}
+      - run: uv sync --frozen
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: pulse
+          config: deploy/kind/cluster.yaml
+      - name: Validate prod overlay renders
+        run: kubectl kustomize deploy/k8s/overlays/prod > /dev/null
+      - run: ./scripts/kind-up.sh
+      - run: ./scripts/kind-e2e.sh
+      - name: KEDA ScaledObject is ready
+        run: kubectl -n pulse wait --for=condition=ready scaledobject/writer --timeout=180s
+      - if: failure()
+        run: |
+          kubectl -n pulse get pods,events
+          kubectl -n pulse logs -l app.kubernetes.io/part-of=pulse --tail 100 --prefix
+
+  image:
+    runs-on: ubuntu-latest
+    needs: [e2e-compose, e2e-kubernetes]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/pulse-analytics:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/pulse-analytics:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
