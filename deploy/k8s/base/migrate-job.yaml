@@ -1,0 +1,40 @@
+# Schema/topic migrations run once per release, never from app replicas (no races on startup).
+# Under Argo CD this Job is a Sync hook in wave -1: after config/secrets (wave -2), before the apps.
+# With plain kubectl the apps simply restart until it completes.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pulse-migrate
+  labels:
+    app.kubernetes.io/name: pulse-migrate
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/sync-wave: "-1"
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 10
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: pulse-migrate
+    spec:
+      restartPolicy: OnFailure
+      securityContext: &podsec
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: migrate
+          image: pulse
+          args: [migrate, all]
+          envFrom: &env
+            - configMapRef: {name: pulse-config}
+            - secretRef: {name: pulse-secrets}
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {memory: 256Mi}
+          securityContext: &containersec
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}

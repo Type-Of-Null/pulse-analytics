@@ -1,0 +1,7 @@
+global:
+  scrape_interval: 5s
+scrape_configs:
+  - job_name: pulse
+    metrics_path: /metrics
+    static_configs:
+      - targets: [ingest-api:8000, analytics-api:8000, admin-api:8000, writer:8000, outbox-relay:8000]
