@@ -4,17 +4,20 @@ from collections.abc import Callable
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, FastAPI, Header, HTTPException, Request, status
+from fastapi import APIRouter, FastAPI, HTTPException, Request, Security, status
 from fastapi.responses import JSONResponse, Response
+from fastapi.security import APIKeyHeader
 from prometheus_client import make_asgi_app
 
 from pulse.domain.errors import EventRejectedError, InvalidQueryError, NotFoundError
 from pulse.domain.projects import hash_api_key
 from pulse.ports import ApiKeyResolver
 
+_api_key_header = APIKeyHeader(name="X-Api-Key", auto_error=False)
+
 
 def api_key_auth(resolver: ApiKeyResolver) -> Callable[..., UUID]:
-    def dependency(x_api_key: Annotated[str | None, Header()] = None) -> UUID:
+    def dependency(x_api_key: Annotated[str | None, Security(_api_key_header)]) -> UUID:
         if not resolver.ready:
             raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "key registry is warming up")
         project_id = resolver.resolve(hash_api_key(x_api_key)) if x_api_key else None

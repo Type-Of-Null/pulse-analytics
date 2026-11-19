@@ -5,7 +5,8 @@ from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import Depends, FastAPI, Header, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Security, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
 from pulse.adapters.postgres.uow import PostgresUnitOfWorkFactory, create_engine
@@ -64,9 +65,14 @@ def build_app(service: ProjectService, admin_token: str, lifespan: object | None
     app = FastAPI(title="Pulse Admin API", version="1.0.0", lifespan=lifespan)  # type: ignore[arg-type]
     install_common(app, lambda: True)
 
-    def require_admin(authorization: Annotated[str | None, Header()] = None) -> None:
-        expected = f"Bearer {admin_token}"
-        if authorization is None or not secrets.compare_digest(authorization, expected):
+    bearer = HTTPBearer(auto_error=False)
+
+    def require_admin(
+        credentials: Annotated[HTTPAuthorizationCredentials | None, Security(bearer)],
+    ) -> None:
+        if credentials is None or not secrets.compare_digest(
+            credentials.credentials.encode(), admin_token.encode()
+        ):
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, "admin token required")
 
     admin = [Depends(require_admin)]
