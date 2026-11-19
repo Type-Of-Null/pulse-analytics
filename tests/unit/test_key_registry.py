@@ -31,3 +31,22 @@ def test_registry_is_not_ready_until_marked() -> None:
     assert not registry.ready
     registry.mark_ready()
     assert registry.ready
+
+
+async def test_registry_goes_stale_when_the_feed_crashes() -> None:
+    import asyncio
+
+    from pulse.adapters.kafka.key_registry import KafkaKeyRegistryFeed
+
+    registry = ApiKeyRegistry()
+    registry.mark_ready()
+    feed = KafkaKeyRegistryFeed("localhost:9092", "projects.api-keys", registry)
+
+    async def crash() -> None:
+        raise ConnectionError("broker gone")
+
+    task = asyncio.create_task(crash())
+    await asyncio.gather(task, return_exceptions=True)
+    feed._on_feed_stopped(task)
+
+    assert not registry.ready

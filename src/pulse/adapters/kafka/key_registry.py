@@ -37,6 +37,13 @@ class KafkaKeyRegistryFeed:
         await self._consumer.seek_to_beginning(*tps)
         end_offsets = await self._consumer.end_offsets(tps)
         self._task = asyncio.create_task(self._run(end_offsets), name="key-registry-feed")
+        self._task.add_done_callback(self._on_feed_stopped)
+
+    def _on_feed_stopped(self, task: asyncio.Task[None]) -> None:
+        if task.cancelled():
+            return
+        self._registry.mark_stale()
+        log.error("key_registry_feed_stopped", error=repr(task.exception()))
 
     async def _partitions(self) -> list[int]:
         admin = AIOKafkaAdminClient(bootstrap_servers=self._bootstrap_servers)

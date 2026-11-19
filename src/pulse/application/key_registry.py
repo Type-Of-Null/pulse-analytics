@@ -23,6 +23,10 @@ class ApiKeyRegistry:
     def mark_ready(self) -> None:
         self._ready = True
 
+    def mark_stale(self) -> None:
+        """The feed stopped: revocations are no longer seen, so stop authenticating."""
+        self._ready = False
+
     def resolve(self, key_hash: str) -> UUID | None:
         return self._keys.get(key_hash)
 
