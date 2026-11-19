@@ -115,3 +115,26 @@ def test_next_offsets_takes_max_per_partition() -> None:
         ("events.raw", 0): 10,
         ("events.raw", 1): 5,
     }
+
+
+async def test_records_polled_while_rebalance_flushes_are_not_lost() -> None:
+    stop = asyncio.Event()
+    sink, dlq = FakeSink(), FakeDlq()
+
+    class RebalancingSource(FakeSource):
+        writer: BatchWriter
+
+        async def poll(self, max_records: int, timeout_ms: int) -> list[RawMessage]:
+            records = list(await super().poll(max_records, timeout_ms))
+            if records and records[0].offset == 1:
+                await self.writer.flush()  # partitions revoked inside getmany()
+            return records
+
+    source = RebalancingSource([[message(0)], [message(1)]], stop)
+    writer = make_writer(source, sink, dlq, flush_interval=60)
+    source.writer = writer
+
+    await writer.run(stop)
+
+    assert sum(len(events) for events, _ in sink.writes) == 2
+    assert source.commits[-1] == {("events.raw", 0): 2}

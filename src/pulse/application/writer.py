@@ -76,7 +76,9 @@ class BatchWriter:
             self.last_heartbeat = time.monotonic()
             timeout_ms = max(int((deadline - time.monotonic()) * 1000), 0)
             room = self._config.batch_size - len(self._buffer)
-            self._buffer.extend(await self._source.poll(max_records=room, timeout_ms=timeout_ms))
+            # Await first: a rebalance during poll may flush and replace `self._buffer`.
+            records = await self._source.poll(max_records=room, timeout_ms=timeout_ms)
+            self._buffer.extend(records)
             if len(self._buffer) >= self._config.batch_size or time.monotonic() >= deadline:
                 await self.flush()
                 deadline = time.monotonic() + self._config.flush_interval
